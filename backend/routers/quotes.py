@@ -304,7 +304,7 @@ def calculate_scores(request: schemas.AnalysisRequest, db: Session = Depends(get
 @router.patch("/bids/{bid_id}/status")
 def update_bid_status(
     bid_id: int, 
-    status: str, 
+    decision: schemas.BidDecision,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(RoleChecker([UserRole.PROCUREMENT_MANAGER]))
 ):
@@ -313,18 +313,48 @@ def update_bid_status(
         raise HTTPException(status_code=404, detail="Bid not found")
     
     old_status = bid.status
-    bid.status = status
+    bid.status = decision.status
+    
+    # Save reviewer comment if provided
+    if decision.comment is not None:
+        bid.reviewer_comments = decision.comment
     
     # Audit Log
+    comment_text = f" | Comment: {decision.comment}" if decision.comment else ""
     log = models.AuditLog(
-        action=f"STATUS_UPDATE_{status.upper()}",
+        action=f"STATUS_UPDATE_{decision.status.upper()}",
         user_id=current_user.id,
-        details=f"Changed bid {bid_id} status from {old_status} to {status}"
+        details=f"Changed bid {bid_id} ({bid.vendor_name}) from {old_status} to {decision.status}{comment_text}"
     )
     db.add(log)
     
     db.commit()
-    db.refresh(bid) # Refresh to get the updated status
+    db.refresh(bid)
+    return bid
+
+@router.patch("/bids/{bid_id}/comment")
+def update_bid_comment(
+    bid_id: int, 
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(RoleChecker([UserRole.PROCUREMENT_MANAGER]))
+):
+    bid = db.query(models.Bid).filter(models.Bid.id == bid_id).first()
+    if not bid:
+        raise HTTPException(status_code=404, detail="Bid not found")
+    
+    bid.reviewer_comments = payload.get("comment", "")
+    
+    # Audit Log
+    log = models.AuditLog(
+        action="REVIEWER_COMMENT",
+        user_id=current_user.id,
+        details=f"Comment on bid {bid_id} ({bid.vendor_name}): {bid.reviewer_comments}"
+    )
+    db.add(log)
+    
+    db.commit()
+    db.refresh(bid)
     return bid
 
 @router.delete("/bids/{bid_id}")
@@ -446,7 +476,38 @@ async def process_analysis(
         bid.incoterms = data.get("Incoterms") or data.get("incoterms") or "N/A"
         bid.warranty_terms = data.get("Warranty") or data.get("warranty") or "N/A"
         bid.is_iatf_certified = data.get("IATFCertified") or data.get("iatf_certified") or False
-        bid.risk_flags = json.dumps(data.get("risk_flags", []))
+        
+        # Base LLM risk flags (structured objects: {"risk": "...", "evidence": "..."})
+        risk_flags = data.get("risk_flags", [])
+        if not isinstance(risk_flags, list):
+            risk_flags = []
+            
+        # Programmatic Risk Checks against Master RFQ
+        if project.rfq_requirements and project.rfq_requirements != "{}":
+            try:
+                reqs = json.loads(project.rfq_requirements)
+                
+                # Check IATF Certification explicitly if required
+                certs_required = reqs.get("certifications", [])
+                if isinstance(certs_required, list) and any("IATF" in str(c).upper() for c in certs_required):
+                    if not bid.is_iatf_certified:
+                        risk_flags.append({
+                            "risk": "Missing Mandatory Certification",
+                            "evidence": f"RFQ explicitly requires IATF 16949, but vendor quote does not mention it"
+                        })
+                        
+            except Exception as e:
+                print(f"Error checking programmatic risks: {e}")
+
+        # Ensure all flags are valid dicts (LLM fallback)
+        formatted_flags = []
+        for flag in risk_flags:
+            if isinstance(flag, dict) and "risk" in flag:
+                formatted_flags.append(flag)
+            elif isinstance(flag, str):
+                formatted_flags.append({"risk": flag, "evidence": "Directly extracted by AI analysis"})
+        
+        bid.risk_flags = json.dumps(formatted_flags)
         
         # Save items
         db.query(models.ExtractedItem).filter(models.ExtractedItem.bid_id == bid.id).delete()

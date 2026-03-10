@@ -118,6 +118,10 @@ def extract_data_from_text(text: str):
     prompt = """
     You are an expert procurement assistant. Extract the following information from the vendor quote text provided below.
     
+    CRITICAL RULES:
+    1. NO NUMERIC HALLUCINATIONS: You must only extract numbers, prices, and days that are EXPLICITLY written in the text. Do not guess or interpolate.
+    2. CITE EVIDENCE: For every risk flag identified, you must provide a short, direct quote or specific reason from the text as 'evidence'.
+    
     Please extract the following specific fields:
     - VendorName: The name of the vendor.
     - TotalCost: The grand total or sum of the quote. return a number.
@@ -135,7 +139,13 @@ def extract_data_from_text(text: str):
     - lead_time: Specific lead time if different from general.
     - material_spec: Any technical material specifications (e.g., "Grade A Steel").
     
-    Return ONLY a valid JSON object matching the following structure. Do not include any preamble, markdown code identifiers, or postscript.
+    Analyze the text and populate "risk_flags" as an array of objects for the following missing or risky conditions:
+    - Warranty deviations (e.g., lower than expected, missing).
+    - Payment term risks (e.g., requiring upfront payment instead of Net 30/60).
+    - Certification gaps (e.g., lack of IATF 16949).
+    - Unusually long lead times.
+    
+    Return ONLY a valid JSON object matching exactly the following structure. Do not include any preamble, markdown formatting, or postscript.
     
     {{
         "VendorName": "...",
@@ -155,7 +165,12 @@ def extract_data_from_text(text: str):
                 "material_spec": "..."
             }}
         ],
-        "risk_flags": ["..."]
+        "risk_flags": [
+            {{
+                "risk": "...",
+                "evidence": "..."
+            }}
+        ]
     }}
     
     If a field is missing, return null.

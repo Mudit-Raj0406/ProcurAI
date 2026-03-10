@@ -81,6 +81,10 @@ class BidBase(BaseModel):
 class BidCreate(BidBase):
     pass
 
+class BidDecision(BaseModel):
+    status: str
+    comment: Optional[str] = None
+
 class Bid(BidBase):
     id: int
     status: str
@@ -94,6 +98,7 @@ class Bid(BidBase):
     
     score: float = 0.0
     score_breakdown: Optional[dict] = None # Detailed scoring info
+    reviewer_comments: Optional[str] = None
     
     items: List[ExtractedItem] = []
 

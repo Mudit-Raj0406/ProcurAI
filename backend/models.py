@@ -55,6 +55,7 @@ class BidStatus(str, enum.Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
     HOLD = "hold"
+    SHORTLISTED = "shortlisted"
 
 class Bid(Base):
     __tablename__ = "bids"
