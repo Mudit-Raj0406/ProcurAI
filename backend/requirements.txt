@@ -8,3 +8,4 @@ pydantic
 mistralai==1.12.1
 pypdf
 python-dotenv
+psycopg2-binary

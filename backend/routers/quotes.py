@@ -18,7 +18,6 @@ router = APIRouter(
 
 # Project Management
 @router.post("/projects", response_model=schemas.Project)
-@router.post("/projects", response_model=schemas.Project)
 def create_project(
     project: schemas.ProjectCreate, 
     db: Session = Depends(get_db),

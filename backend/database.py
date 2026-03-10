@@ -1,13 +1,25 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./procurai_v2.db"
-# For PostgreSQL use: "postgresql://user:password@postgresserver/db"
+load_dotenv()
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False, "timeout": 30}
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    # Fix for SQLAlchemy 1.4+ which dropped support for the 'postgres://' URI scheme
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    engine = create_engine(DATABASE_URL)
+else:
+    # Fallback to local SQLite if no remote database is configured
+    SQLALCHEMY_DATABASE_URL = "sqlite:///./procurai_v2.db"
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False, "timeout": 30}
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
