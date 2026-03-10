@@ -5,6 +5,6 @@ python-jose[cryptography]
 passlib
 sqlalchemy
 pydantic
-mistralai
+mistralai==1.12.1
 pypdf
 python-dotenv
