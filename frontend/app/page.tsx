@@ -96,7 +96,7 @@ export default function Home() {
         <main className="min-h-screen p-8 flex flex-col items-center justify-center font-sans">
             <div className="w-full max-w-6xl z-10">
                 <header className="mb-12 text-center relative">
-                    <div className="absolute top-0 right-0 flex items-center gap-4">
+                    <div className="absolute top-0 right-0 z-50 flex items-center gap-4">
                         <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/20">
                             <User className="w-4 h-4 text-white/70" />
                             <span className="text-sm font-medium text-white/90">
@@ -105,11 +105,12 @@ export default function Home() {
                             </span>
                         </div>
                         <button
-                            onClick={logout}
-                            className="bg-red-500/20 hover:bg-red-500/40 p-2.5 rounded-full border border-red-500/30 transition-all group"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); logout(); }}
+                            className="bg-red-500/20 hover:bg-red-500/40 p-2.5 rounded-full border border-red-500/30 transition-all group cursor-pointer relative z-50"
                             title="Log Out"
+                            type="button"
                         >
-                            <LogOut className="w-5 h-5 text-red-200 group-hover:scale-110 transition-transform" />
+                            <LogOut className="w-5 h-5 text-red-200 group-hover:scale-110 transition-transform pointer-events-none" />
                         </button>
                     </div>
                     <h1 className="text-6xl font-black text-white drop-shadow-lg mb-2 tracking-tight">
