@@ -46,13 +46,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const logout = () => {
+        // Clear all auth data first
         localStorage.removeItem('token');
         localStorage.removeItem('role');
         localStorage.removeItem('email');
         delete api.defaults.headers.common['Authorization'];
         setUser(null);
-        // Force a page refresh to clear all states and redirect
-        window.location.href = '/login';
+        // Use replace for a clean full-page redirect (no back-button return)
+        // Wrapped in setTimeout to ensure it runs after React state flush
+        setTimeout(() => {
+            window.location.replace('/login');
+        }, 0);
     };
 
     return (

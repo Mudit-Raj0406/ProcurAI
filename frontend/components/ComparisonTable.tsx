@@ -15,6 +15,22 @@ interface ScoreBreakdownItem {
     score: number;
 }
 
+interface RiskFlag {
+    risk: string;
+    category: string;  // CERTIFICATION|PAYMENT|WARRANTY|LEAD_TIME|INCOTERMS|CLAUSE|NUMERIC|COMPLIANCE
+    severity: string;   // critical|high|medium|low
+    evidence: string;
+    source: string;     // programmatic|llm|hybrid
+}
+
+interface ComplianceSummary {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    total: number;
+}
+
 interface Bid {
     id: number;
     rfq_id: string;
@@ -30,6 +46,7 @@ interface Bid {
     score?: number;
     status?: string;
     reviewer_comments?: string;
+    compliance_summary?: ComplianceSummary;
     score_breakdown?: {
         price: ScoreBreakdownItem;
         lead_time: ScoreBreakdownItem;
@@ -349,19 +366,32 @@ export default function ComparisonTable({ refreshTrigger, rfqId }: { refreshTrig
                                                 <span className="text-white/60 text-xs">{bid.warranty_terms || "-"}</span>
                                             </td>
                                             <td className="px-6 py-5">
-                                                {isCompliant ? (
-                                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/20 text-green-200 text-xs font-medium border border-green-500/30">
-                                                        <CheckCircle className="w-3 h-3" /> Yes
-                                                    </span>
-                                                ) : isNonCompliant ? (
-                                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-red-500/20 text-red-200 text-xs font-medium border border-red-500/30">
-                                                        <XCircle className="w-3 h-3" /> No
-                                                    </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-200 text-xs font-medium border border-yellow-500/30">
-                                                        <HelpCircle className="w-3 h-3" /> {bid.compliance_status || "?"}
-                                                    </span>
-                                                )}
+                                                <div className="flex flex-col gap-1.5">
+                                                    {isCompliant ? (
+                                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/20 text-green-200 text-xs font-medium border border-green-500/30">
+                                                            <CheckCircle className="w-3 h-3" /> Yes
+                                                        </span>
+                                                    ) : isNonCompliant ? (
+                                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-red-500/20 text-red-200 text-xs font-medium border border-red-500/30">
+                                                            <XCircle className="w-3 h-3" /> No
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-200 text-xs font-medium border border-yellow-500/30">
+                                                            <HelpCircle className="w-3 h-3" /> {bid.compliance_status || "?"}
+                                                        </span>
+                                                    )}
+                                                    {/* Risk count indicator */}
+                                                    {bid.compliance_summary && bid.compliance_summary.total > 0 && (
+                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold ${
+                                                            bid.compliance_summary.critical > 0 ? 'text-red-300' :
+                                                            bid.compliance_summary.high > 0 ? 'text-orange-300' :
+                                                            'text-yellow-300'
+                                                        }`}>
+                                                            <AlertTriangle className="w-2.5 h-2.5" />
+                                                            {bid.compliance_summary.total} risk{bid.compliance_summary.total !== 1 ? 's' : ''}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 text-right align-top" onClick={(e) => e.stopPropagation()}>
                                                 {isManager ? (
@@ -507,33 +537,119 @@ export default function ComparisonTable({ refreshTrigger, rfqId }: { refreshTrig
                                                             </div>
                                                         )}
 
-                                                        {/* Risk Factors */}
+                                                        {/* Compliance & Risk Report */}
                                                         <div className="md:col-span-2 space-y-4">
                                                             <div>
-                                                                <h4 className="text-xs font-bold text-white/60 uppercase tracking-widest mb-3">Analysis & Risks</h4>
+                                                                <div className="flex items-center justify-between mb-3">
+                                                                    <h4 className="text-xs font-bold text-white/60 uppercase tracking-widest">Compliance & Risk Report</h4>
+                                                                    {bid.compliance_summary && bid.compliance_summary.total > 0 && (
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            {bid.compliance_summary.critical > 0 && (
+                                                                                <span className="px-2 py-0.5 text-[10px] font-black rounded-full bg-red-500/20 text-red-300 border border-red-500/30">
+                                                                                    {bid.compliance_summary.critical} CRITICAL
+                                                                                </span>
+                                                                            )}
+                                                                            {bid.compliance_summary.high > 0 && (
+                                                                                <span className="px-2 py-0.5 text-[10px] font-black rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                                                                                    {bid.compliance_summary.high} HIGH
+                                                                                </span>
+                                                                            )}
+                                                                            {bid.compliance_summary.medium > 0 && (
+                                                                                <span className="px-2 py-0.5 text-[10px] font-black rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+                                                                                    {bid.compliance_summary.medium} MED
+                                                                                </span>
+                                                                            )}
+                                                                            {bid.compliance_summary.low > 0 && (
+                                                                                <span className="px-2 py-0.5 text-[10px] font-black rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                                                                    {bid.compliance_summary.low} LOW
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                                 <div className="p-3 bg-white/5 rounded-lg border border-white/10 text-xs text-white/80 leading-relaxed">
                                                                     {bid.risk_flags ? (
-                                                                        <ul className="list-disc list-inside">
-                                                                            {(() => {
-                                                                                try {
-                                                                                    const risks = JSON.parse(bid.risk_flags);
-                                                                                    return Array.isArray(risks) ? risks.map((r: any, i: number) => (
-                                                                                        <li key={i} className="text-red-200/80 mb-2 leading-tight">
-                                                                                            <span className="font-semibold">{typeof r === 'string' ? r : r.risk}</span>
-                                                                                            {typeof r === 'object' && r.evidence && (
-                                                                                                <span className="block text-[10px] text-white/50 italic mt-1 ml-5">
-                                                                                                    ↳ {r.evidence}
-                                                                                                </span>
-                                                                                            )}
-                                                                                        </li>
-                                                                                    )) : <li>{bid.risk_flags}</li>
-                                                                                } catch {
-                                                                                    return <li>{bid.risk_flags}</li>
+                                                                        (() => {
+                                                                            try {
+                                                                                const risks: RiskFlag[] = JSON.parse(bid.risk_flags);
+                                                                                if (!Array.isArray(risks) || risks.length === 0) {
+                                                                                    return <span className="text-green-300/70 italic flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5" /> No compliance issues detected.</span>;
                                                                                 }
-                                                                            })()}
-                                                                        </ul>
+
+                                                                                // Group by category
+                                                                                const grouped: Record<string, RiskFlag[]> = {};
+                                                                                risks.forEach((r) => {
+                                                                                    const cat = r.category || 'COMPLIANCE';
+                                                                                    if (!grouped[cat]) grouped[cat] = [];
+                                                                                    grouped[cat].push(r);
+                                                                                });
+
+                                                                                const categoryLabels: Record<string, { label: string; icon: string }> = {
+                                                                                    CERTIFICATION: { label: 'Certifications', icon: '🛡' },
+                                                                                    PAYMENT: { label: 'Payment Terms', icon: '💰' },
+                                                                                    WARRANTY: { label: 'Warranty', icon: '📋' },
+                                                                                    LEAD_TIME: { label: 'Lead Time', icon: '⏱' },
+                                                                                    INCOTERMS: { label: 'Incoterms', icon: '🚢' },
+                                                                                    CLAUSE: { label: 'Contractual Clauses', icon: '📄' },
+                                                                                    NUMERIC: { label: 'Data Validation', icon: '🔢' },
+                                                                                    COMPLIANCE: { label: 'General Compliance', icon: '⚠' },
+                                                                                };
+
+                                                                                const severityConfig: Record<string, { bg: string; text: string; border: string; label: string }> = {
+                                                                                    critical: { bg: 'bg-red-500/15', text: 'text-red-300', border: 'border-red-500/30', label: 'CRITICAL' },
+                                                                                    high: { bg: 'bg-orange-500/15', text: 'text-orange-300', border: 'border-orange-500/30', label: 'HIGH' },
+                                                                                    medium: { bg: 'bg-yellow-500/15', text: 'text-yellow-300', border: 'border-yellow-500/30', label: 'MEDIUM' },
+                                                                                    low: { bg: 'bg-blue-500/15', text: 'text-blue-300', border: 'border-blue-500/30', label: 'LOW' },
+                                                                                };
+
+                                                                                const categoryOrder = ['CERTIFICATION', 'PAYMENT', 'WARRANTY', 'LEAD_TIME', 'INCOTERMS', 'CLAUSE', 'NUMERIC', 'COMPLIANCE'];
+
+                                                                                return (
+                                                                                    <div className="space-y-4">
+                                                                                        {categoryOrder.filter(cat => grouped[cat]).map((cat) => {
+                                                                                            const catInfo = categoryLabels[cat] || { label: cat, icon: '⚠' };
+                                                                                            return (
+                                                                                                <div key={cat}>
+                                                                                                    <div className="flex items-center gap-2 mb-2">
+                                                                                                        <span className="text-sm">{catInfo.icon}</span>
+                                                                                                        <span className="text-[10px] font-black text-white/50 uppercase tracking-widest">{catInfo.label}</span>
+                                                                                                    </div>
+                                                                                                    <div className="space-y-2 ml-5">
+                                                                                                        {grouped[cat].map((r, i) => {
+                                                                                                            const sev = severityConfig[r.severity] || severityConfig.medium;
+                                                                                                            return (
+                                                                                                                <div key={i} className={`p-2.5 rounded-lg border ${sev.bg} ${sev.border}`}>
+                                                                                                                    <div className="flex items-start justify-between gap-2">
+                                                                                                                        <span className={`font-semibold text-xs ${sev.text}`}>{r.risk}</span>
+                                                                                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                                                                                            <span className={`px-1.5 py-0.5 text-[9px] font-black rounded ${sev.bg} ${sev.text} border ${sev.border}`}>
+                                                                                                                                {sev.label}
+                                                                                                                            </span>
+                                                                                                                            <span className={`px-1.5 py-0.5 text-[9px] rounded bg-white/5 text-white/40 border border-white/10`}>
+                                                                                                                                {r.source === 'llm' ? 'AI' : r.source === 'hybrid' ? 'AI+Rule' : 'Rule'}
+                                                                                                                            </span>
+                                                                                                                        </div>
+                                                                                                                    </div>
+                                                                                                                    {r.evidence && (
+                                                                                                                        <p className="text-[10px] text-white/50 mt-1.5 leading-relaxed italic">
+                                                                                                                            {r.evidence}
+                                                                                                                        </p>
+                                                                                                                    )}
+                                                                                                                </div>
+                                                                                                            );
+                                                                                                        })}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            );
+                                                                                        })}
+                                                                                    </div>
+                                                                                );
+                                                                            } catch {
+                                                                                return <span className="text-white/40">{bid.risk_flags}</span>;
+                                                                            }
+                                                                        })()
                                                                     ) : (
-                                                                        <span className="text-white/40 italic">No specific risk flags detected.</span>
+                                                                        <span className="text-green-300/70 italic flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5" /> No compliance issues detected.</span>
                                                                     )}
                                                                 </div>
                                                             </div>

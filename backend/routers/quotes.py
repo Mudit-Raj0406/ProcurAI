@@ -4,7 +4,7 @@ from typing import List
 import json
 from database import get_db
 import models, schemas
-from services import docling_extractor, llm_extractor, scoring
+from services import docling_extractor, llm_extractor, scoring, compliance_engine
 from dependencies import get_current_user, RoleChecker
 from models import UserRole
 import shutil
@@ -214,13 +214,41 @@ async def upload_bid(
     db.refresh(db_bid)
     return db_bid
 
+def _compute_compliance_summary(risk_flags_json: str) -> dict:
+    """Computes severity counts from structured risk flags JSON."""
+    summary = {"critical": 0, "high": 0, "medium": 0, "low": 0, "total": 0}
+    if not risk_flags_json:
+        return summary
+    try:
+        flags = json.loads(risk_flags_json)
+        if not isinstance(flags, list):
+            return summary
+        for flag in flags:
+            severity = flag.get("severity", "medium") if isinstance(flag, dict) else "medium"
+            if severity in summary:
+                summary[severity] += 1
+            summary["total"] += 1
+    except Exception:
+        pass
+    return summary
+
+
 @router.get("/compare-bids/{rfq_id}", response_model=List[schemas.Bid])
 def compare_bids(rfq_id: str, db: Session = Depends(get_db)):
     """
-    Retrieves all bids associated with a specific RFQ ID.
+    Retrieves all bids associated with a specific RFQ ID, enriched with compliance summaries.
     """
     bids = db.query(models.Bid).filter(models.Bid.rfq_id == rfq_id).all()
-    return bids
+    # Enrich with compliance_summary
+    result = []
+    for bid in bids:
+        if hasattr(schemas.Bid, "from_orm"):
+            bid_dto = schemas.Bid.from_orm(bid)
+        else:
+            bid_dto = schemas.Bid.model_validate(bid)
+        bid_dto.compliance_summary = _compute_compliance_summary(bid.risk_flags)
+        result.append(bid_dto)
+    return result
 
 @router.post("/score", response_model=List[schemas.Bid])
 def calculate_scores(request: schemas.AnalysisRequest, db: Session = Depends(get_db)):
@@ -292,8 +320,9 @@ def calculate_scores(request: schemas.AnalysisRequest, db: Session = Depends(get
             else:
                 bid_dto = schemas.Bid.model_validate(db_bid)
                 
-            # Inject the breakdown
+            # Inject the breakdown and compliance summary
             bid_dto.score_breakdown = s_bid.get("score_breakdown")
+            bid_dto.compliance_summary = _compute_compliance_summary(db_bid.risk_flags)
             final_response.append(bid_dto)
     
     db.commit()
@@ -476,37 +505,48 @@ async def process_analysis(
         bid.warranty_terms = data.get("Warranty") or data.get("warranty") or "N/A"
         bid.is_iatf_certified = data.get("IATFCertified") or data.get("iatf_certified") or False
         
-        # Base LLM risk flags (structured objects: {"risk": "...", "evidence": "..."})
-        risk_flags = data.get("risk_flags", [])
-        if not isinstance(risk_flags, list):
-            risk_flags = []
-            
-        # Programmatic Risk Checks against Master RFQ
+        # --- Compliance Engine: Build comprehensive, structured risk flags ---
+        # Collect raw LLM risk flags
+        llm_risk_flags = data.get("risk_flags", [])
+        if not isinstance(llm_risk_flags, list):
+            llm_risk_flags = []
+        # Normalize LLM flags (handle strings)
+        normalized_llm_flags = []
+        for flag in llm_risk_flags:
+            if isinstance(flag, dict) and "risk" in flag:
+                normalized_llm_flags.append(flag)
+            elif isinstance(flag, str):
+                normalized_llm_flags.append({"risk": flag, "evidence": "Identified during AI analysis"})
+
+        # Build bid_data dict for compliance engine
+        bid_compliance_data = {
+            "vendor_name": bid.vendor_name,
+            "total_cost": bid.total_cost,
+            "lead_time": bid.lead_time,
+            "payment_terms": bid.payment_terms,
+            "compliance_status": bid.compliance_status,
+            "incoterms": bid.incoterms,
+            "warranty_terms": bid.warranty_terms,
+            "is_iatf_certified": bid.is_iatf_certified,
+        }
+
+        # Parse RFQ requirements
+        rfq_reqs = {}
         if project.rfq_requirements and project.rfq_requirements != "{}":
             try:
-                reqs = json.loads(project.rfq_requirements)
-                
-                # Check IATF Certification explicitly if required
-                certs_required = reqs.get("certifications", [])
-                if isinstance(certs_required, list) and any("IATF" in str(c).upper() for c in certs_required):
-                    if not bid.is_iatf_certified:
-                        risk_flags.append({
-                            "risk": "Missing Mandatory Certification",
-                            "evidence": f"RFQ explicitly requires IATF 16949, but vendor quote does not mention it"
-                        })
-                        
+                rfq_reqs = json.loads(project.rfq_requirements)
             except Exception as e:
-                print(f"Error checking programmatic risks: {e}")
+                print(f"Error parsing RFQ requirements: {e}")
 
-        # Ensure all flags are valid dicts (LLM fallback)
-        formatted_flags = []
-        for flag in risk_flags:
-            if isinstance(flag, dict) and "risk" in flag:
-                formatted_flags.append(flag)
-            elif isinstance(flag, str):
-                formatted_flags.append({"risk": flag, "evidence": "Directly extracted by AI analysis"})
-        
-        bid.risk_flags = json.dumps(formatted_flags)
+        # Run the full compliance engine
+        structured_flags = compliance_engine.build_compliance_report(
+            bid_data=bid_compliance_data,
+            rfq_requirements=rfq_reqs,
+            llm_risk_flags=normalized_llm_flags,
+            bid_raw_text=bid.raw_text or "",
+        )
+
+        bid.risk_flags = json.dumps(structured_flags)
         
         # Save items
         db.query(models.ExtractedItem).filter(models.ExtractedItem.bid_id == bid.id).delete()

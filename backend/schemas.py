@@ -85,21 +85,32 @@ class BidDecision(BaseModel):
     status: str
     comment: Optional[str] = None
 
+class RiskFlag(BaseModel):
+    """Structured risk flag with category, severity, and evidence."""
+    risk: str
+    category: str = "COMPLIANCE"  # CERTIFICATION|PAYMENT|WARRANTY|LEAD_TIME|INCOTERMS|CLAUSE|NUMERIC|COMPLIANCE
+    severity: str = "medium"      # critical|high|medium|low
+    evidence: str = ""
+    source: str = "programmatic"  # programmatic|llm|hybrid
+
 class Bid(BidBase):
     id: int
     status: str
     created_at: Optional[datetime] = None
-    
+
     # Automotive
     incoterms: Optional[str] = None
     warranty_terms: Optional[str] = None
     is_iatf_certified: bool = False
-    risk_flags: Optional[str] = None # JSON string
-    
+    risk_flags: Optional[str] = None # JSON string (structured RiskFlag objects)
+
     score: float = 0.0
     score_breakdown: Optional[dict] = None # Detailed scoring info
     reviewer_comments: Optional[str] = None
-    
+
+    # Compliance summary counts (computed, not stored)
+    compliance_summary: Optional[dict] = None  # {"critical": 2, "high": 1, "medium": 0, "low": 1, "total": 4}
+
     items: List[ExtractedItem] = []
 
     class Config:

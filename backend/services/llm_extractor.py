@@ -25,46 +25,25 @@ def get_mistral_client():
 
 
 def call_mistral(prompt: str, instructions: str = "") -> str:
-    """Call Mistral AI using beta.conversations.start and return the text response."""
+    """Call Mistral AI using chat.complete and return the text response."""
     client = get_mistral_client()
     if not client:
         raise RuntimeError("Mistral client not initialized. Check MISTRAL_API_KEY.")
 
-    inputs = [
-        {
-            "role": "user",
-            "content": prompt,
-        }
-    ]
+    messages = []
+    if instructions:
+        messages.append({"role": "system", "content": instructions})
+    messages.append({"role": "user", "content": prompt})
 
-    completion_args = {
-        "temperature": 0,
-        "max_tokens": 4096,
-        "top_p": 1,
-    }
-
-    response = client.beta.conversations.start(
-        inputs=inputs,
+    response = client.chat.complete(
         model="mistral-large-latest",
-        instructions=instructions,
-        completion_args=completion_args,
-        tools=[],
+        messages=messages,
+        temperature=0,
+        max_tokens=4096,
+        top_p=1,
     )
 
-    # Extract text from response
-    # The response object has an `outputs` list; the last item contains the assistant reply
-    if hasattr(response, 'outputs') and response.outputs:
-        last_output = response.outputs[-1]
-        if hasattr(last_output, 'text'):
-            return last_output.text
-        elif hasattr(last_output, 'content'):
-            return last_output.content
-        else:
-            return str(last_output)
-    elif hasattr(response, 'choices') and response.choices:
-        return response.choices[0].message.content
-    else:
-        return str(response)
+    return response.choices[0].message.content
 
 
 def call_mistral_with_retry(prompt: str, instructions: str = "", max_retries: int = 3) -> str:
@@ -116,37 +95,71 @@ def parse_json_safely(text: str) -> dict:
 
 def extract_data_from_text(text: str):
     prompt = """
-    You are an expert procurement assistant. Extract the following information from the vendor quote text provided below.
-    
-    CRITICAL RULES:
-    1. NO NUMERIC HALLUCINATIONS: You must only extract numbers, prices, and days that are EXPLICITLY written in the text. Do not guess or interpolate.
-    2. CITE EVIDENCE: For every risk flag identified, you must provide a short, direct quote or specific reason from the text as 'evidence'.
-    
-    Please extract the following specific fields:
-    - VendorName: The name of the vendor.
-    - TotalCost: The grand total or sum of the quote. return a number.
-    - LeadTime: The general lead time mentioned (e.g. "4 weeks").
-    - PaymentTerms: The payment terms (e.g. "Net 30").
-    - ComplianceStatus: Any mention of compliance standards like IATF 16949 (Yes/No/Unknown).
-    - Incoterms: Delivery terms (e.g., "FOB", "EXT").
-    - Warranty: Warranty period (e.g., "12 months").
-    - IATFCertified: Set to true if IATF 16949 certification is mentioned.
-    
-    Also extract line items as 'items'. Each item should have:
-    - part_number: The automotive part number if present.
-    - item_name: Description of the part.
-    - price: Unit price.
-    - lead_time: Specific lead time if different from general.
-    - material_spec: Any technical material specifications (e.g., "Grade A Steel").
-    
-    Analyze the text and populate "risk_flags" as an array of objects for the following missing or risky conditions:
-    - Warranty deviations (e.g., lower than expected, missing).
-    - Payment term risks (e.g., requiring upfront payment instead of Net 30/60).
-    - Certification gaps (e.g., lack of IATF 16949).
-    - Unusually long lead times.
-    
-    Return ONLY a valid JSON object matching exactly the following structure. Do not include any preamble, markdown formatting, or postscript.
-    
+    You are an expert automotive procurement analyst. Extract structured data from the vendor quote text below.
+
+    ═══════════════════════════════════════════════════════
+    CRITICAL GUARDRAILS — FOLLOW EXACTLY:
+    ═══════════════════════════════════════════════════════
+
+    1. ZERO NUMERIC HALLUCINATION:
+       - Only extract numbers, prices, quantities, and durations that are EXPLICITLY written in the text.
+       - If TotalCost is not explicitly stated as a grand total, SUM the individual line item prices. If you cannot compute it, return null.
+       - NEVER invent, estimate, round, or interpolate numeric values.
+       - If a field is not explicitly stated, return null — do NOT guess.
+
+    2. EVIDENCE-BACKED RISK FLAGS:
+       - Every risk_flag MUST include a direct quote (5-20 words) copied verbatim from the document as 'evidence'.
+       - If you cannot provide a direct quote, state the specific absence (e.g., "No warranty clause found in document").
+       - NEVER generate a risk flag without evidence.
+
+    3. TRICKY CLAUSE DETECTION — Actively scan for:
+       - Price escalation / adjustment clauses (e.g., "prices subject to change")
+       - Hidden costs: tooling fees, setup charges, shipping exclusions, taxes excluded
+       - Conditional warranties that can be voided
+       - Liability caps or limitation of liability clauses
+       - Minimum order quantities (MOQ) that restrict flexibility
+       - Cancellation or termination penalties
+       - Retention of title clauses
+       - Non-firm pricing / time-limited validity
+       - Advance payment or upfront payment requirements beyond industry norms
+
+    ═══════════════════════════════════════════════════════
+    FIELDS TO EXTRACT:
+    ═══════════════════════════════════════════════════════
+
+    - VendorName: The legal or trade name of the vendor/supplier.
+    - TotalCost: Grand total or sum. MUST be a number explicitly from the text, or null.
+    - LeadTime: General lead time as stated (e.g., "4 weeks", "30 days").
+    - PaymentTerms: Exact payment terms (e.g., "Net 30", "50% advance, 50% on delivery").
+    - ComplianceStatus: "Yes" if all compliance standards met, "Partial" if some, "No" if explicitly non-compliant, "Unknown" if not mentioned.
+    - Incoterms: Delivery terms (e.g., "FOB", "EXW", "DDP", "CIF").
+    - Warranty: Exact warranty period as stated (e.g., "12 months", "2 years").
+    - IATFCertified: true ONLY if IATF 16949 certification is explicitly mentioned. false otherwise.
+
+    LINE ITEMS (extract as 'items' array):
+    - part_number: Automotive part number if present.
+    - item_name: Description of the part/service.
+    - price: Unit price (number). MUST be from text, not computed.
+    - lead_time: Item-specific lead time if different from general.
+    - material_spec: Technical material specifications (e.g., "Grade A Steel", "AL 6061-T6").
+
+    RISK FLAGS (extract as 'risk_flags' array):
+    Identify ALL of the following if present:
+    - Missing or inadequate warranty
+    - Payment terms requiring advance/upfront payment
+    - Missing certifications (IATF 16949, ISO 9001, etc.)
+    - Lead times exceeding 12 weeks for standard parts
+    - Price escalation or non-firm pricing clauses
+    - Hidden costs (tooling, shipping, taxes excluded)
+    - Conditional warranty voidance clauses
+    - Liability limitations
+    - Cancellation penalties
+    - Any other clause that could disadvantage the buyer
+
+    ═══════════════════════════════════════════════════════
+    OUTPUT FORMAT — Return ONLY this JSON, nothing else:
+    ═══════════════════════════════════════════════════════
+
     {{
         "VendorName": "...",
         "TotalCost": 1000.0,
@@ -167,14 +180,14 @@ def extract_data_from_text(text: str):
         ],
         "risk_flags": [
             {{
-                "risk": "...",
-                "evidence": "..."
+                "risk": "Short descriptive title of the risk",
+                "evidence": "Direct quote from document or specific absence description"
             }}
         ]
     }}
-    
-    If a field is missing, return null.
-    
+
+    If a field is missing from the text, return null. Do NOT include markdown, preamble, or explanation.
+
     Quote Text:
     {text}
     """.format(text=text)
