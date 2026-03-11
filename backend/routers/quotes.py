@@ -10,6 +10,7 @@ from models import UserRole
 import shutil
 import os
 import uuid
+import tempfile
 
 router = APIRouter(
     prefix="/quotes",
@@ -87,12 +88,12 @@ async def upload_rfq(
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
-    # Save upload file temporarily
-    temp_filename = f"temp_rfq_{uuid.uuid4()}.pdf"
+    # Save upload file temporarily (use /tmp for Vercel compatibility)
+    temp_filename = os.path.join(tempfile.gettempdir(), f"temp_rfq_{uuid.uuid4()}.pdf")
     await file.seek(0)
     with open(temp_filename, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    
+
     # 1. Update Project record immediately (Ingest)
     project = db.query(models.Project).filter(models.Project.rfq_id == rfq_id).first()
     if not project:
@@ -169,8 +170,8 @@ async def upload_bid(
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
-    # Save upload file temporarily
-    temp_filename = f"temp_bid_{uuid.uuid4()}.pdf"
+    # Save upload file temporarily (use /tmp for Vercel compatibility)
+    temp_filename = os.path.join(tempfile.gettempdir(), f"temp_bid_{uuid.uuid4()}.pdf")
     await file.seek(0)
     with open(temp_filename, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
