@@ -10,8 +10,9 @@ Because Vercel's backend hosting is serverless (ephemeral), the local SQLite dat
 2. Click **New Project**, choose an organization, name the project `procurai`, and create a secure database password.
 3. Once the database is provisioned (takes a few minutes), navigate to **Project Settings -> Database**.
 4. Scroll down to **Connection String** -> **URI**.
-5. Copy the connection string. Make sure to replace `[YOUR-PASSWORD]` with the password you just created.
-   * *Example string: `postgresql://postgres:MySecurePassword123@db.xyz.supabase.co:5432/postgres`*
+5. **CRUCIAL STEP FOR VERCEL**: You MUST use the **Connection Pooler** instead of the Direct Connection. Check the box for "Use connection pooling" (Mode: Transaction).
+6. Copy the connection string. Make sure to replace `[YOUR-PASSWORD]` with the password you just created.
+   * *Example string: `postgresql://postgres:MySecurePassword123@aws-0-eu-central-1.pooler.supabase.com:6543/postgres`*
 
 ---
 

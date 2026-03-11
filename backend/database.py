@@ -12,6 +12,13 @@ if DATABASE_URL:
     # Fix for SQLAlchemy 1.4+ which dropped support for the 'postgres://' URI scheme
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        
+    # Supabase/Cloud PostgreSQL requires SSL. Append if not present.
+    if "postgresql://" in DATABASE_URL and "?" not in DATABASE_URL:
+        DATABASE_URL += "?sslmode=require"
+    elif "postgresql://" in DATABASE_URL and "sslmode=" not in DATABASE_URL:
+        DATABASE_URL += "&sslmode=require"
+        
     engine = create_engine(DATABASE_URL)
 else:
     # Fallback to local SQLite if no remote database is configured
