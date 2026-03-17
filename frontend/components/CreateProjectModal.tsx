@@ -78,11 +78,11 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess }: { isO
                             onChange={(e) => setCategory(e.target.value)}
                             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none"
                         >
-                            <option value="Machined Parts">Machined Parts</option>
-                            <option value="Electronics">Electronics</option>
-                            <option value="Fasteners">Fasteners</option>
-                            <option value="Packaging">Packaging</option>
-                            <option value="Services">Services</option>
+                            <option className="bg-slate-900 text-white" value="Machined Parts">Machined Parts</option>
+                            <option className="bg-slate-900 text-white" value="Electronics">Electronics</option>
+                            <option className="bg-slate-900 text-white" value="Fasteners">Fasteners</option>
+                            <option className="bg-slate-900 text-white" value="Packaging">Packaging</option>
+                            <option className="bg-slate-900 text-white" value="Services">Services</option>
                         </select>
                     </div>
 
