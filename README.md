@@ -19,9 +19,9 @@
     - If using Gemini API Key, set `GOOGLE_API_KEY` in environment.
 5.  Run the server:
     ```bash
-    uvicorn main:app --reload
+    uvicorn main:app --reload --port 8010
     ```
-    The API will be available at `http://localhost:8000`.
+    The API will be available at `http://localhost:8010`.
 
 ### Frontend (Next.js)
 
@@ -36,7 +36,7 @@
     ```bash
     npm run dev
     ```
-    The dashboard will be available at `http://localhost:3000`.
+    The dashboard will be available at `http://localhost:3010`.
 
 ## Features
 - **Upload**: Drag & drop PDF RFQs/Quotes.
