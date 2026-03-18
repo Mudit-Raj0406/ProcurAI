@@ -1,7 +1,7 @@
 import requests
 import json
 
-url = "http://127.0.0.1:8010/auth/signup"
+url = "http://127.0.0.1:8000/auth/signup"
 payload = {
     "email": "definitive_success@example.com",
     "password": "securepassword123",
