@@ -1,7 +1,7 @@
 import requests
 import sys
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "http://127.0.0.1:8010"
 
 def get_token(email, password):
     response = requests.post(f"{BASE_URL}/auth/token", data={"username": email, "password": password})
